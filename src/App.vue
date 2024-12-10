@@ -23,6 +23,12 @@
             </button>
           </div>
         </div>
+        <div class="mb-4">
+          <label for="length" class="block text-sm font-medium text-gray-700"
+            >Password Length: {{ passwordLength }}</label
+          >
+          <input type="range" v-model="passwordLength" min="8" max="20" class="mt-1 w-full" />
+        </div>
         <button
           type="button"
           @click="generatePassword"
@@ -35,6 +41,34 @@
           class="mt-2 w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
         >
           Validate
+        </button>
+        <button
+          type="button"
+          @click="saveToHistory"
+          class="mt-2 w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
+        >
+          Save to History
+        </button>
+        <button
+          type="button"
+          @click="showHistory"
+          class="mt-2 w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+        >
+          Show History
+        </button>
+        <button
+          type="button"
+          @click="clearPassword"
+          class="mt-2 w-full bg-red-600 text-white py-2 rounded-md hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
+        >
+          Clear Password
+        </button>
+        <button
+          type="button"
+          @click="clearHistory"
+          class="mt-2 w-full bg-red-800 text-white py-2 rounded-md hover:bg-red-900 focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
+        >
+          Clear History
         </button>
       </form>
       <div v-if="password" class="mt-6">
@@ -53,6 +87,26 @@
             Password Strength:
             <span :class="passwordStrength.color">{{ passwordStrength.level }}</span>
           </h3>
+          <div class="w-full h-2 mt-1 rounded bg-gray-200">
+            <div
+              :style="{
+                width:
+                  passwordStrength.level === 'Weak'
+                    ? '33%'
+                    : passwordStrength.level === 'Moderate'
+                      ? '66%'
+                      : '100%'
+              }"
+              class="h-full rounded"
+              :class="
+                passwordStrength.level === 'Weak'
+                  ? 'bg-red-500'
+                  : passwordStrength.level === 'Moderate'
+                    ? 'bg-yellow-500'
+                    : 'bg-green-500'
+              "
+            ></div>
+          </div>
         </div>
         <div v-if="passwordTips.length" class="mt-4">
           <h3 class="text-lg font-semibold">Tips to Improve:</h3>
@@ -65,6 +119,27 @@
             Warning: Your password has appeared in a data breach!
           </h3>
         </div>
+        <div v-if="commonPasswordWarning" class="mt-4">
+          <h3 class="text-lg font-semibold text-red-500">
+            Warning: Your password is too common or easy to guess!
+          </h3>
+          <p class="text-sm text-gray-600">
+            Consider using a mix of letters, numbers, and symbols to increase security.
+          </p>
+        </div>
+        <button
+          v-if="password"
+          @click="copyToClipboard"
+          class="mt-4 w-full bg-gray-300 text-gray-800 py-2 rounded-md hover:bg-gray-400 focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50"
+        >
+          Copy to Clipboard
+        </button>
+      </div>
+      <div v-if="history.length" class="mt-6">
+        <h2 class="text-xl font-bold text-center">Password History:</h2>
+        <ul class="list-disc pl-5 mt-2">
+          <li v-for="(item, index) in history" :key="index">{{ item }}</li>
+        </ul>
       </div>
     </div>
   </div>
@@ -82,8 +157,14 @@ export default {
       },
       passwordTips: [],
       breachResult: false,
-      showPassword: false // Flag to toggle password visibility
+      commonPasswordWarning: false,
+      showPassword: false, // Flag to toggle password visibility
+      passwordLength: 12, // Default password length
+      history: [] // Array to store password history
     }
+  },
+  mounted() {
+    this.loadHistory() // Load password history on component mount
   },
   methods: {
     async validatePassword() {
@@ -91,6 +172,7 @@ export default {
       this.validationResults = []
       this.passwordTips = []
       this.breachResult = false
+      this.commonPasswordWarning = false
       this.passwordStrength = {
         level: '',
         color: ''
@@ -134,8 +216,61 @@ export default {
       if (!numberValid) this.passwordTips.push('Add at least one number.')
       if (!specialCharValid) this.passwordTips.push('Add at least one special character.')
 
+      // Check for common or weak passwords
+      this.checkCommonPassword(this.password)
+
+      // Check for sequential characters
+      this.checkSequentialCharacters(this.password)
+
       // Check password breach
       await this.checkPasswordBreach()
+    },
+    checkCommonPassword(password) {
+      const commonPasswords = [
+        '123456',
+        'password',
+        '123456789',
+        '12345678',
+        '12345',
+        '1234567',
+        'qwerty',
+        'abc123',
+        'letmein',
+        'welcome',
+        'admin',
+        'passw0rd',
+        '123123',
+        'football',
+        'iloveyou'
+      ]
+
+      if (commonPasswords.includes(password.toLowerCase())) {
+        this.commonPasswordWarning = true
+      }
+    },
+    checkSequentialCharacters(password) {
+      const sequentialPatterns = [
+        '123456',
+        'abcdef',
+        'ghijkl',
+        'mnopqr',
+        'stuvwx',
+        'yz',
+        '098765',
+        'zyxwv',
+        'qwert',
+        'asdfg'
+      ]
+
+      for (const pattern of sequentialPatterns) {
+        if (password.includes(pattern)) {
+          this.validationResults.push({
+            message: 'Password should not contain sequential characters.',
+            valid: false
+          })
+          break
+        }
+      }
     },
     async checkPasswordBreach() {
       const hash = await this.sha1(this.password)
@@ -161,7 +296,7 @@ export default {
       return hashHex.toUpperCase()
     },
     generatePassword() {
-      const length = 12
+      const length = this.passwordLength // Use the length from the slider
       const charset =
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+~`|}{[]:;?><,./-='
       let password = ''
@@ -172,6 +307,50 @@ export default {
     },
     togglePasswordVisibility() {
       this.showPassword = !this.showPassword
+    },
+    copyToClipboard() {
+      navigator.clipboard
+        .writeText(this.password)
+        .then(() => {
+          alert('Password copied to clipboard!')
+        })
+        .catch((err) => {
+          console.error('Failed to copy: ', err)
+        })
+    },
+    saveToHistory() {
+      if (this.password) {
+        this.history.push(this.password)
+        localStorage.setItem('passwordHistory', JSON.stringify(this.history))
+      } else {
+        alert('No password to save!')
+      }
+    },
+    loadHistory() {
+      const storedHistory = localStorage.getItem('passwordHistory')
+      if (storedHistory) {
+        this.history = JSON.parse(storedHistory)
+      }
+    },
+    showHistory() {
+      if (this.history.length === 0) {
+        alert('No password history available.')
+      } else {
+        alert('Password History:\n' + this.history.join('\n'))
+      }
+    },
+    clearPassword() {
+      this.password = '' // Clear the password input
+      this.validationResults = [] // Reset validation results
+      this.passwordStrength = { level: '', color: '' } // Reset password strength
+      this.passwordTips = [] // Reset tips
+      this.breachResult = false // Reset breach result
+      this.commonPasswordWarning = false // Reset common password warning
+    },
+    clearHistory() {
+      this.history = []
+      localStorage.removeItem('passwordHistory') // Clear history from localStorage
+      alert('Password history cleared!')
     }
   }
 }
